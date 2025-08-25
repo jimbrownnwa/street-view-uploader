@@ -1,17 +1,35 @@
 import requests
+import time
 from math import atan2, degrees
 from .keys import GOOGLE_API_KEY
 
+# Reuse session for better performance
+session = requests.Session()
 
+# Rate limiting
+last_api_call = 0
+MIN_API_INTERVAL = 0.02  # 50 QPS limit = 20ms between calls
+
+def rate_limit():
+    """Enforce rate limiting between API calls"""
+    global last_api_call
+    current_time = time.time()
+    elapsed = current_time - last_api_call
+    if elapsed < MIN_API_INTERVAL:
+        time.sleep(MIN_API_INTERVAL - elapsed)
+    last_api_call = time.time()
 
 def get_geocode(address):
-    print("📡 get_geocode is using requests properly")
-    ...
-
+    rate_limit()
     url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={GOOGLE_API_KEY}"
-    res = requests.get(url)
+    res = session.get(url, timeout=30)
     res.raise_for_status()
     data = res.json()
+    
+    # Handle rate limiting responses
+    if data.get('status') == 'OVER_QUERY_LIMIT':
+        raise Exception("Google Maps API rate limit exceeded")
+    
     if data['status'] != 'OK' or not data['results']:
         return None, None
     location = data['results'][0]['geometry']['location']
@@ -19,10 +37,16 @@ def get_geocode(address):
 
 
 def get_metadata(lat, lng):
+    rate_limit()
     url = f"https://maps.googleapis.com/maps/api/streetview/metadata?location={lat},{lng}&key={GOOGLE_API_KEY}"
-    res = requests.get(url)
+    res = session.get(url, timeout=30)
     res.raise_for_status()
     data = res.json()
+    
+    # Handle rate limiting responses
+    if data.get('status') == 'OVER_QUERY_LIMIT':
+        raise Exception("Google Maps API rate limit exceeded")
+    
     if data['status'] != 'OK' or 'pano_id' not in data:
         return None, None, None
     return data['location']['lat'], data['location']['lng'], data['pano_id']

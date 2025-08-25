@@ -10,8 +10,11 @@ cloudinary.config(
     api_secret=CLOUDINARY_CONFIG["api_secret"]
 )
 
+# Reuse session for better performance
+session = requests.Session()
+
 def upload_to_cloudinary(image_url, public_id=None):
-    response = requests.get(image_url, stream=True)
+    response = session.get(image_url, stream=True, timeout=30)
     if response.status_code != 200:
         raise Exception(f"Failed to download image: {response.status_code}")
 
